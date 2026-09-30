@@ -5,6 +5,7 @@ Web server for Render deployment with:
 - Copy & Download Cookie File actions
 - Live Plays Remaining, Username, and Token Expiry Telemetry
 - Start / Stop Auto-Refresh Keep-Alive Mode (Every 3.5 Hours)
+- Linux / Render Compatibility (Hidden and Non-Hidden Cookie Scanning)
 - Multi-Account Dashboard with One-Click Actions
 """
 import os
@@ -140,10 +141,10 @@ def decode_jwt_exp(token: str) -> Dict[str, Any]:
 
 def get_cookie_file(phone: str) -> str:
     candidates = [
-        os.path.join(COOKIE_DIR, f".cookies_{phone}.json"),
         os.path.join(COOKIE_DIR, f"cookies_{phone}.json"),
-        os.path.join(HERE, f".cookies_{phone}.json"),
+        os.path.join(COOKIE_DIR, f".cookies_{phone}.json"),
         os.path.join(HERE, f"cookies_{phone}.json"),
+        os.path.join(HERE, f".cookies_{phone}.json"),
     ]
     for c in candidates:
         if os.path.exists(c):
@@ -152,7 +153,6 @@ def get_cookie_file(phone: str) -> str:
 
 
 def get_safe_cookie_value(sess: requests.Session, cookie_name: str) -> str:
-    """Safely extracts cookie value avoiding MultipleCookiesError/CookieConflictError."""
     for c in sess.cookies:
         if c.name == cookie_name:
             return c.value
@@ -181,14 +181,26 @@ def load_session_from_file(cookie_file: str) -> requests.Session:
     return sess
 
 
-def save_session_to_file(sess: requests.Session, cookie_file: str):
-    os.makedirs(os.path.dirname(os.path.abspath(cookie_file)), exist_ok=True)
+def save_phone_cookies(phone: str, sess: requests.Session, extra_data: Optional[Dict[str, Any]] = None):
+    os.makedirs(COOKIE_DIR, exist_ok=True)
     c_dict = {}
     for c in sess.cookies:
         c_dict[c.name] = c.value
+
+    # Merge any tokens from response payload
+    if extra_data:
+        if "access_token" in extra_data:
+            c_dict["access_token"] = extra_data["access_token"]
+        if "refresh_token" in extra_data:
+            c_dict["refresh_token"] = extra_data["refresh_token"]
+
     c_list = [{"name": k, "value": v} for k, v in c_dict.items()]
-    with open(cookie_file, "w", encoding="utf-8") as f:
-        json.dump(c_list, f, indent=2)
+    
+    # Save both standard and dotfile variations to ensure sync
+    for name in (f"cookies_{phone}.json", f".cookies_{phone}.json"):
+        target_path = os.path.join(COOKIE_DIR, name)
+        with open(target_path, "w", encoding="utf-8") as f:
+            json.dump(c_list, f, indent=2)
 
 
 def fetch_account_telemetry(phone: str) -> Dict[str, Any]:
@@ -242,12 +254,15 @@ def scan_all_accounts() -> List[Dict[str, Any]]:
     seen = {}
     search_dirs = [COOKIE_DIR, HERE]
     for d in search_dirs:
-        for f in glob.glob(os.path.join(d, "*cookies_*.json")):
-            digits = "".join(c for c in os.path.basename(f) if c.isdigit())
-            if len(digits) >= 10:
-                phone = digits[-10:]
-                if phone not in seen:
-                    seen[phone] = fetch_account_telemetry(phone)
+        if not os.path.exists(d):
+            continue
+        for fname in os.listdir(d):
+            if "cookies_" in fname and fname.endswith(".json"):
+                digits = "".join(c for c in fname if c.isdigit())
+                if len(digits) >= 10:
+                    phone = digits[-10:]
+                    if phone not in seen:
+                        seen[phone] = fetch_account_telemetry(phone)
     return [seen[p] for p in sorted(seen.keys())]
 
 
@@ -260,8 +275,9 @@ def refresh_account_token(phone: str) -> (bool, str):
     try:
         r = sess.post(f"{BASE_URL}/api/auth/refresh", json={}, timeout=10)
         if r.status_code in (200, 201) and r.json().get("success"):
-            save_session_to_file(sess, c_file)
-            new_acc = get_safe_cookie_value(sess, "access_token")
+            resp_data = r.json().get("data", {}) if isinstance(r.json().get("data"), dict) else {}
+            save_phone_cookies(phone, sess, resp_data)
+            new_acc = get_safe_cookie_value(sess, "access_token") or resp_data.get("access_token", "")
             exp_info = decode_jwt_exp(new_acc)
             return True, f"Token extended! ({exp_info.get('time_left')})"
         else:
@@ -296,7 +312,7 @@ def api_get_accounts():
             "next_run_sec": next_sec,
             "next_run_str": f"{hrs:02d}:{mins:02d}:{secs:02d}" if auto_daemon.is_running else "Paused"
         },
-        "logs": activity_logs[-20:]
+        "logs": activity_logs[-25:]
     })
 
 
@@ -389,8 +405,7 @@ def api_verify_otp():
                 pass
 
         # Save cookies
-        cookie_file = os.path.join(COOKIE_DIR, f".cookies_{phone}.json")
-        save_session_to_file(sess, cookie_file)
+        save_phone_cookies(phone, sess)
 
         add_log(f"🎉 New account +91 {phone} logged in & saved successfully!", "success")
         return jsonify({"success": True, "message": f"Logged in successfully as +91 {phone}!"})
@@ -431,9 +446,11 @@ def api_upload_cookies():
         if not phone:
             return jsonify({"success": False, "error": "Could not detect mobile number from cookie or filename."}), 400
 
-        target_file = os.path.join(COOKIE_DIR, f".cookies_{phone}.json")
-        with open(target_file, "w", encoding="utf-8") as f:
-            json.dump(cookie_json, f, indent=2)
+        # Save both files
+        for fname in (f"cookies_{phone}.json", f".cookies_{phone}.json"):
+            target_file = os.path.join(COOKIE_DIR, fname)
+            with open(target_file, "w", encoding="utf-8") as f:
+                json.dump(cookie_json, f, indent=2)
 
         add_log(f"📁 Cookies JSON uploaded for +91 {phone}", "success")
         return jsonify({"success": True, "phone": phone, "message": f"Cookies saved for +91 {phone}!"})
@@ -477,10 +494,10 @@ def api_delete_account():
 
     deleted = False
     for f in (
-        os.path.join(COOKIE_DIR, f".cookies_{phone}.json"),
         os.path.join(COOKIE_DIR, f"cookies_{phone}.json"),
-        os.path.join(HERE, f".cookies_{phone}.json"),
-        os.path.join(HERE, f"cookies_{phone}.json")
+        os.path.join(COOKIE_DIR, f".cookies_{phone}.json"),
+        os.path.join(HERE, f"cookies_{phone}.json"),
+        os.path.join(HERE, f".cookies_{phone}.json")
     ):
         if os.path.exists(f):
             try:
