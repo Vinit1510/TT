@@ -2,6 +2,7 @@
 Thunder Trail - Account & Session Keep-Alive Hub
 Web server for Render deployment with:
 - Cookies JSON upload & Direct OTP login
+- Copy & Download Cookie File actions
 - Live Plays Remaining, Username, and Token Expiry Telemetry
 - Start / Stop Auto-Refresh Keep-Alive Mode (Every 3.5 Hours)
 - Multi-Account Dashboard with One-Click Actions
@@ -18,7 +19,7 @@ import datetime
 import threading
 import requests
 from typing import Optional, Dict, Any, List
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, Response
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -150,6 +151,14 @@ def get_cookie_file(phone: str) -> str:
     return candidates[0]
 
 
+def get_safe_cookie_value(sess: requests.Session, cookie_name: str) -> str:
+    """Safely extracts cookie value avoiding MultipleCookiesError/CookieConflictError."""
+    for c in sess.cookies:
+        if c.name == cookie_name:
+            return c.value
+    return ""
+
+
 def load_session_from_file(cookie_file: str) -> requests.Session:
     sess = requests.Session()
     sess.headers.update(HEADERS)
@@ -157,8 +166,16 @@ def load_session_from_file(cookie_file: str) -> requests.Session:
         try:
             with open(cookie_file, "r", encoding="utf-8") as f:
                 c_data = json.load(f)
+            sess.cookies.clear()
+            # Deduplicate by cookie name to eliminate conflict errors
+            seen = {}
             for c in c_data:
-                sess.cookies.set(c["name"], c["value"])
+                name = c.get("name")
+                val = c.get("value")
+                if name and val:
+                    seen[name] = val
+            for name, val in seen.items():
+                sess.cookies.set(name, val)
         except Exception:
             pass
     return sess
@@ -166,7 +183,9 @@ def load_session_from_file(cookie_file: str) -> requests.Session:
 
 def save_session_to_file(sess: requests.Session, cookie_file: str):
     os.makedirs(os.path.dirname(os.path.abspath(cookie_file)), exist_ok=True)
-    c_dict = {c.name: c.value for c in sess.cookies}
+    c_dict = {}
+    for c in sess.cookies:
+        c_dict[c.name] = c.value
     c_list = [{"name": k, "value": v} for k, v in c_dict.items()]
     with open(cookie_file, "w", encoding="utf-8") as f:
         json.dump(c_list, f, indent=2)
@@ -179,8 +198,8 @@ def fetch_account_telemetry(phone: str) -> Dict[str, Any]:
 
     sess = load_session_from_file(c_file)
     
-    # Check expiry from access token
-    access_token = sess.cookies.get("access_token", "")
+    # Check expiry safely
+    access_token = get_safe_cookie_value(sess, "access_token")
     exp_meta = decode_jwt_exp(access_token)
 
     username = "User"
@@ -242,9 +261,9 @@ def refresh_account_token(phone: str) -> (bool, str):
         r = sess.post(f"{BASE_URL}/api/auth/refresh", json={}, timeout=10)
         if r.status_code in (200, 201) and r.json().get("success"):
             save_session_to_file(sess, c_file)
-            new_acc = sess.cookies.get("access_token", "")
+            new_acc = get_safe_cookie_value(sess, "access_token")
             exp_info = decode_jwt_exp(new_acc)
-            return True, f"Token extended! {exp_info.get('time_left')}"
+            return True, f"Token extended! ({exp_info.get('time_left')})"
         else:
             return False, f"Refresh failed: {r.status_code} ({r.text[:80]})"
     except Exception as e:
@@ -421,6 +440,32 @@ def api_upload_cookies():
 
     except Exception as e:
         return jsonify({"success": False, "error": f"Invalid JSON cookie format: {str(e)}"}), 400
+
+
+@app.route("/api/cookies/download/<phone>", methods=["GET"])
+def api_download_cookies(phone: str):
+    clean_phone = "".join(c for c in phone if c.isdigit())[-10:]
+    c_file = get_cookie_file(clean_phone)
+    if os.path.exists(c_file):
+        with open(c_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return Response(
+            json.dumps(data, indent=2),
+            mimetype="application/json",
+            headers={"Content-Disposition": f"attachment;filename=cookies_{clean_phone}.json"}
+        )
+    return jsonify({"success": False, "error": "File not found"}), 404
+
+
+@app.route("/api/cookies/json/<phone>", methods=["GET"])
+def api_get_cookie_json(phone: str):
+    clean_phone = "".join(c for c in phone if c.isdigit())[-10:]
+    c_file = get_cookie_file(clean_phone)
+    if os.path.exists(c_file):
+        with open(c_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return jsonify({"success": True, "phone": clean_phone, "data": data, "json_str": json.dumps(data, indent=2)})
+    return jsonify({"success": False, "error": "File not found"}), 404
 
 
 @app.route("/api/cookies/delete", methods=["POST"])
