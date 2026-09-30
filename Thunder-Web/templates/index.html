@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ Thunder Trail - Session & Keep-Alive Hub</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        coke: {
+                            red: '#e41c23',
+                            dark: '#0f172a',
+                            card: '#1e293b',
+                            border: '#334155'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.75; transform: scale(1.03); }
+        }
+        .pulse-active {
+            animation: pulse-slow 2.5s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased selection:bg-red-500 selection:text-white">
+
+    <!-- Top Navigation -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-red-600 to-amber-500 flex items-center justify-center shadow-lg shadow-red-500/20">
+                    <i data-lucide="zap" class="w-6 h-6 text-white fill-current"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight tracking-tight text-white flex items-center gap-2">
+                        Thunder Trail <span class="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-mono">24/7 HUB</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Session Keep-Alive & Account Manager</p>
+                </div>
+            </div>
+
+            <!-- Header Action Buttons -->
+            <div class="flex items-center space-x-3">
+                <button onclick="openModal('uploadModal')" class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                    <i data-lucide="upload" class="w-4 h-4 text-amber-400"></i>
+                    <span>Upload Cookies</span>
+                </button>
+                <button onclick="openModal('otpModal')" class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white shadow-md shadow-red-600/30 transition">
+                    <i data-lucide="user-plus" class="w-4 h-4"></i>
+                    <span>New OTP Login</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+        <!-- Top Banner / Control Station -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Card 1: 24/7 Auto Keep-Alive Controller -->
+            <div class="lg:col-span-2 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span id="autoStatusBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                                AUTO KEEP-ALIVE: ACTIVE
+                            </span>
+                            <span class="text-xs text-slate-400 font-mono">Loop: 3.5 Hours</span>
+                        </div>
+                        <h2 class="text-xl font-bold text-white mt-2">Continuous Session Refresher</h2>
+                        <p class="text-sm text-slate-400 mt-1 max-w-xl">
+                            Automatically renews both Access and Refresh tokens before expiry, keeping all connected accounts alive 24/7 forever.
+                        </p>
+                    </div>
+
+                    <!-- Toggle Button -->
+                    <div class="flex items-center gap-3">
+                        <button id="toggleAutoBtn" onclick="toggleAutoMode()" class="px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow-lg flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white">
+                            <i data-lucide="play" class="w-4 h-4"></i>
+                            <span>Running (Click to Stop)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats Bar -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-800/80">
+                    <div>
+                        <span class="text-xs text-slate-500 font-medium">Next Auto Refresh</span>
+                        <p id="nextRefreshCountdown" class="text-lg font-bold font-mono text-amber-400 mt-0.5">03:29:45</p>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-500 font-medium">Last Cycle</span>
+                        <p id="lastRunTime" class="text-sm font-semibold text-slate-300 mt-0.5 truncate">Active</p>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-500 font-medium">Total Accounts</span>
+                        <p id="totalAccountsCount" class="text-lg font-bold text-cyan-400 mt-0.5">0</p>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-500 font-medium">Bulk Action</span>
+                        <button onclick="refreshAll()" class="mt-0.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                            <span>Refresh All Now</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2: Quick Status Overview -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+                <div>
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+                        <i data-lucide="activity" class="w-4 h-4 text-red-400"></i>
+                        <span>Today's Total Plays Left</span>
+                    </h3>
+                    <div class="flex items-baseline gap-2">
+                        <span id="totalPlaysAvailable" class="text-4xl font-black text-white">0</span>
+                        <span class="text-sm text-slate-400 font-medium">plays remaining</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">Across all verified accounts active in your cookies directory.</p>
+                </div>
+
+                <div class="pt-4 border-t border-slate-800 flex items-center justify-between">
+                    <span class="text-xs text-slate-400 font-medium">Auto-Reload Timer:</span>
+                    <span class="text-xs font-mono text-emerald-400 font-bold flex items-center gap-1">
+                        <i data-lucide="clock" class="w-3 h-3"></i> Live Syncing (5s)
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Accounts Section Header -->
+        <div class="flex items-center justify-between pt-4">
+            <div>
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i data-lucide="users" class="w-5 h-5 text-red-500"></i>
+                    <span>Connected Accounts</span>
+                </h2>
+                <p class="text-xs text-slate-400 mt-0.5">Manage session tokens, check plays remaining, and monitor health</p>
+            </div>
+            <button onclick="fetchAccounts()" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Refresh Dashboard">
+                <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <!-- Accounts Grid -->
+        <div id="accountsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Loading placeholder -->
+            <div class="col-span-full py-16 text-center text-slate-500">
+                <i data-lucide="loader" class="w-8 h-8 animate-spin mx-auto text-red-500 mb-2"></i>
+                <p class="text-sm">Scanning cookies and loading live account telemetry...</p>
+            </div>
+        </div>
+
+        <!-- Live Server Log Drawer -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                    <i data-lucide="terminal" class="w-4 h-4 text-emerald-400"></i>
+                    <span>Live Keep-Alive Activity Logs</span>
+                </h3>
+                <span class="text-xs text-slate-500">Latest 20 events</span>
+            </div>
+            <div id="logConsole" class="bg-slate-950 rounded-xl p-4 font-mono text-xs text-slate-300 space-y-1.5 h-44 overflow-y-auto border border-slate-800/80">
+                <p class="text-slate-600">// Waiting for events...</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal 1: Upload Cookies JSON -->
+    <div id="uploadModal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+            <button onclick="closeModal('uploadModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+                    <i data-lucide="file-json" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-white">Upload Cookies JSON</h3>
+                    <p class="text-xs text-slate-400">Import existing .cookies_*.json file</p>
+                </div>
+            </div>
+
+            <form id="uploadForm" onsubmit="handleUpload(event)" class="space-y-4">
+                <div class="border-2 border-dashed border-slate-700 hover:border-slate-500 rounded-xl p-6 text-center transition cursor-pointer bg-slate-950/50" onclick="document.getElementById('cookieFileInput').click()">
+                    <i data-lucide="upload-cloud" class="w-8 h-8 text-slate-400 mx-auto mb-2"></i>
+                    <p class="text-xs font-semibold text-slate-300">Click to browse or drop file</p>
+                    <p class="text-[10px] text-slate-500 mt-1">Supports .json cookie files</p>
+                    <input type="file" id="cookieFileInput" name="file" accept=".json" class="hidden" onchange="updateFileName(this)">
+                </div>
+                <p id="selectedFileName" class="text-xs font-mono text-amber-400 text-center truncate hidden"></p>
+
+                <div id="uploadStatusMsg" class="text-xs p-2.5 rounded-lg hidden"></div>
+
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeModal('uploadModal')" class="w-1/2 py-2.5 text-xs font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition">Cancel</button>
+                    <button type="submit" id="uploadSubmitBtn" class="w-1/2 py-2.5 text-xs font-semibold rounded-xl bg-amber-600 hover:bg-amber-500 text-white transition flex items-center justify-center gap-1.5">
+                        <i data-lucide="check" class="w-4 h-4"></i>
+                        <span>Upload & Save</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 2: New OTP Login -->
+    <div id="otpModal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+            <button onclick="closeModal('otpModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center border border-red-500/30">
+                    <i data-lucide="smartphone" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-white">Login Account via OTP</h3>
+                    <p class="text-xs text-slate-400">Authenticates directly with Coca-Cola API</p>
+                </div>
+            </div>
+
+            <!-- Step 1: Send OTP -->
+            <div id="otpStep1" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">10-Digit Mobile Number</label>
+                    <div class="flex">
+                        <span class="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-slate-700 bg-slate-800 text-slate-400 text-xs font-bold">+91</span>
+                        <input type="tel" id="loginPhoneInput" maxlength="10" placeholder="9876543210" class="w-full bg-slate-950 border border-slate-700 rounded-r-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 font-mono">
+                    </div>
+                </div>
+                <div id="otpSendStatus" class="text-xs p-2.5 rounded-lg hidden"></div>
+                <button type="button" id="sendOtpBtn" onclick="requestOtp()" class="w-full py-2.5 text-xs font-semibold rounded-xl bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30 transition flex items-center justify-center gap-1.5">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                    <span>Send 6-Digit OTP</span>
+                </button>
+            </div>
+
+            <!-- Step 2: Verify OTP (Initially Hidden) -->
+            <div id="otpStep2" class="space-y-4 hidden">
+                <div class="p-3 bg-slate-950/80 rounded-xl border border-slate-800 text-xs text-slate-300 flex items-center justify-between">
+                    <span>Sending code to: <strong id="displayTargetPhone" class="text-white font-mono"></strong></span>
+                    <button onclick="resetOtpSteps()" class="text-red-400 hover:underline text-[11px]">Change</button>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1.5">Enter 6-Digit OTP</label>
+                    <input type="text" id="loginOtpCode" maxlength="6" placeholder="123456" class="w-full text-center tracking-[0.4em] font-mono text-lg bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div id="otpVerifyStatus" class="text-xs p-2.5 rounded-lg hidden"></div>
+                <button type="button" id="verifyOtpBtn" onclick="verifyOtp()" class="w-full py-2.5 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-1.5">
+                    <i data-lucide="lock" class="w-4 h-4"></i>
+                    <span>Verify & Save Session</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Controller -->
+    <script>
+        let autoIsRunning = true;
+
+        async function fetchAccounts() {
+            try {
+                const res = await fetch('/api/accounts');
+                const data = await res.json();
+                if (data.success) {
+                    renderDashboard(data);
+                }
+            } catch (err) {
+                console.error("Failed to fetch accounts:", err);
+            }
+        }
+
+        function renderDashboard(data) {
+            const accounts = data.accounts || [];
+            const auto = data.auto_mode || {};
+            const logs = data.logs || [];
+
+            // 1. Update Auto Keep-Alive Controls
+            autoIsRunning = auto.is_running;
+            const toggleBtn = document.getElementById('toggleAutoBtn');
+            const statusBadge = document.getElementById('autoStatusBadge');
+            const nextCountdown = document.getElementById('nextRefreshCountdown');
+            const lastRun = document.getElementById('lastRunTime');
+
+            if (autoIsRunning) {
+                statusBadge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+                statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> AUTO KEEP-ALIVE: ACTIVE`;
+                toggleBtn.className = "px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow-lg flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white";
+                toggleBtn.innerHTML = `<i data-lucide="pause" class="w-4 h-4"></i><span>Running (Click to Stop)</span>`;
+                nextCountdown.innerText = auto.next_run_str;
+            } else {
+                statusBadge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-red-500/20 text-red-400 border border-red-500/30";
+                statusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-400"></span> AUTO KEEP-ALIVE: STOPPED`;
+                toggleBtn.className = "px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow-lg flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white";
+                toggleBtn.innerHTML = `<i data-lucide="play" class="w-4 h-4"></i><span>Stopped (Click to Start)</span>`;
+                nextCountdown.innerText = "PAUSED";
+            }
+
+            lastRun.innerText = auto.last_run;
+            document.getElementById('totalAccountsCount').innerText = accounts.length;
+
+            // Total plays calculation
+            const totalPlays = accounts.reduce((sum, acc) => sum + (acc.plays_remaining || 0), 0);
+            document.getElementById('totalPlaysAvailable').innerText = totalPlays;
+
+            // 2. Render Account Cards
+            const grid = document.getElementById('accountsGrid');
+            if (accounts.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full py-12 text-center bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl">
+                        <i data-lucide="users" class="w-10 h-10 text-slate-600 mx-auto mb-2"></i>
+                        <h4 class="text-sm font-semibold text-slate-300">No accounts connected yet</h4>
+                        <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Upload an existing .cookies_*.json file or perform a fresh OTP login to start keeping sessions alive 24/7.</p>
+                        <div class="mt-4 flex justify-center gap-3">
+                            <button onclick="openModal('uploadModal')" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700">Upload Cookies</button>
+                            <button onclick="openModal('otpModal')" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-500">New OTP Login</button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                grid.innerHTML = accounts.map(acc => {
+                    const isExp = acc.is_expired;
+                    const statusClass = isExp ? "bg-red-500/10 text-red-400 border-red-500/30" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
+                    const statusText = isExp ? "EXPIRED" : "ACTIVE";
+                    const plays = acc.plays_remaining || 0;
+                    const playsBadgeClass = plays > 0 ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/30" : "bg-slate-800 text-slate-500 border-slate-700";
+
+                    return `
+                        <div class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group">
+                            <div>
+                                <!-- Header -->
+                                <div class="flex items-start justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-white text-sm">
+                                            ${acc.phone.slice(-2)}
+                                        </div>
+                                        <div>
+                                            <h3 class="font-bold text-base text-white tracking-tight flex items-center gap-2">
+                                                +91 ${acc.phone}
+                                            </h3>
+                                            <p class="text-xs text-slate-400">User: <strong class="text-slate-300">${acc.username}</strong></p>
+                                        </div>
+                                    </div>
+                                    <span class="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider border ${statusClass}">
+                                        ${statusText}
+                                    </span>
+                                </div>
+
+                                <!-- Key Stats -->
+                                <div class="grid grid-cols-2 gap-3 my-4 py-3 border-y border-slate-800/80">
+                                    <div>
+                                        <span class="text-[11px] text-slate-500 font-medium">Plays Remaining</span>
+                                        <div class="mt-1">
+                                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${playsBadgeClass}">
+                                                <i data-lucide="target" class="w-3.5 h-3.5"></i>
+                                                ${plays} / 5 Left
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span class="text-[11px] text-slate-500 font-medium">Best Score & Rank</span>
+                                        <p class="text-xs font-bold text-amber-400 mt-1.5">
+                                            ${acc.best_score ? acc.best_score.toLocaleString() + ' pts' : '0 pts'}
+                                            <span class="text-slate-400 font-normal">(${acc.rank})</span>
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- Expiry Details -->
+                                <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                                    <span>Token Expiry:</span>
+                                    <span class="font-mono text-slate-300 font-semibold">${acc.expiry_str} (${acc.time_left})</span>
+                                </div>
+                            </div>
+
+                            <!-- Card Action Buttons -->
+                            <div class="flex items-center gap-2 pt-3 border-t border-slate-800/80">
+                                <button onclick="refreshSingle('${acc.phone}')" class="flex-1 py-2 text-xs font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center justify-center gap-1.5">
+                                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-cyan-400"></i>
+                                    <span>Refresh Token</span>
+                                </button>
+                                <button onclick="deleteAccount('${acc.phone}')" class="p-2 text-xs font-semibold rounded-xl bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-slate-700 transition" title="Remove Account">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // 3. Render Logs Console
+            const consoleDiv = document.getElementById('logConsole');
+            if (logs.length > 0) {
+                consoleDiv.innerHTML = logs.map(l => {
+                    let color = "text-slate-300";
+                    if (l.level === "success") color = "text-emerald-400";
+                    if (l.level === "error") color = "text-red-400";
+                    if (l.level === "warning") color = "text-amber-400";
+                    return `<p><span class="text-slate-500">[${l.timestamp}]</span> <span class="${color}">${l.message}</span></p>`;
+                }).join('');
+                consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            }
+
+            lucide.createIcons();
+        }
+
+        async function toggleAutoMode() {
+            const endpoint = autoIsRunning ? '/api/auto/stop' : '/api/auto/start';
+            await fetch(endpoint, { method: 'POST' });
+            fetchAccounts();
+        }
+
+        async function refreshSingle(phone) {
+            const res = await fetch('/api/refresh', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: phone })
+            });
+            const data = await res.json();
+            fetchAccounts();
+        }
+
+        async function refreshAll() {
+            const res = await fetch('/api/refresh', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            fetchAccounts();
+        }
+
+        async function deleteAccount(phone) {
+            if (!confirm(`Are you sure you want to remove account +91 ${phone}?`)) return;
+            await fetch('/api/cookies/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: phone })
+            });
+            fetchAccounts();
+        }
+
+        // Upload handler
+        function updateFileName(input) {
+            if (input.files && input.files[0]) {
+                const nameDisplay = document.getElementById('selectedFileName');
+                nameDisplay.innerText = "Selected: " + input.files[0].name;
+                nameDisplay.classList.remove('hidden');
+            }
+        }
+
+        async function handleUpload(e) {
+            e.preventDefault();
+            const input = document.getElementById('cookieFileInput');
+            if (!input.files || !input.files[0]) {
+                alert("Please choose a cookies JSON file.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+
+            const status = document.getElementById('uploadStatusMsg');
+            status.className = "text-xs p-2.5 rounded-lg bg-slate-800 text-slate-300 block";
+            status.innerText = "Uploading & validating cookies...";
+
+            try {
+                const res = await fetch('/api/cookies/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    status.className = "text-xs p-2.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 block";
+                    status.innerText = data.message;
+                    setTimeout(() => {
+                        closeModal('uploadModal');
+                        fetchAccounts();
+                    }, 1200);
+                } else {
+                    status.className = "text-xs p-2.5 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 block";
+                    status.innerText = data.error || "Upload failed";
+                }
+            } catch (err) {
+                status.className = "text-xs p-2.5 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 block";
+                status.innerText = "Network error during upload";
+            }
+        }
+
+        // OTP Login Handlers
+        let pendingPhone = "";
+        async function requestOtp() {
+            const phone = document.getElementById('loginPhoneInput').value.trim();
+            const status = document.getElementById('otpSendStatus');
+            const btn = document.getElementById('sendOtpBtn');
+
+            if (phone.length !== 10) {
+                status.className = "text-xs p-2.5 rounded-lg bg-red-500/20 text-red-400 block";
+                status.innerText = "Please enter a valid 10-digit number.";
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i><span>Sending OTP...</span>`;
+            lucide.createIcons();
+
+            try {
+                const res = await fetch('/api/auth/send-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: phone })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    pendingPhone = phone;
+                    document.getElementById('displayTargetPhone').innerText = "+91 " + phone;
+                    document.getElementById('otpStep1').classList.add('hidden');
+                    document.getElementById('otpStep2').classList.remove('hidden');
+                } else {
+                    status.className = "text-xs p-2.5 rounded-lg bg-red-500/20 text-red-400 block";
+                    status.innerText = data.error || "Failed to send OTP.";
+                }
+            } catch (err) {
+                status.className = "text-xs p-2.5 rounded-lg bg-red-500/20 text-red-400 block";
+                status.innerText = "Network error";
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i data-lucide="send" class="w-4 h-4"></i><span>Send 6-Digit OTP</span>`;
+                lucide.createIcons();
+            }
+        }
+
+        async function verifyOtp() {
+            const otp = document.getElementById('loginOtpCode').value.trim();
+            const status = document.getElementById('otpVerifyStatus');
+            const btn = document.getElementById('verifyOtpBtn');
+
+            if (otp.length < 4) {
+                status.className = "text-xs p-2.5 rounded-lg bg-red-500/20 text-red-400 block";
+                status.innerText = "Please enter the OTP code.";
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i><span>Verifying...</span>`;
+            lucide.createIcons();
+
+            try {
+                const res = await fetch('/api/auth/verify-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: pendingPhone, otp: otp })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    status.className = "text-xs p-2.5 rounded-lg bg-emerald-500/20 text-emerald-400 block";
+                    status.innerText = data.message;
+                    setTimeout(() => {
+                        closeModal('otpModal');
+                        resetOtpSteps();
+                        fetchAccounts();
+                    }, 1200);
+                } else {
+                    status.className = "text-xs p-2.5 rounded-lg bg-red-500/20 text-red-400 block";
+                    status.innerText = data.error || "Verification failed.";
+                }
+            } catch (err) {
+                status.className = "text-xs p-2.5 rounded-lg bg-red-500/20 text-red-400 block";
+                status.innerText = "Network error";
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i data-lucide="lock" class="w-4 h-4"></i><span>Verify & Save Session</span>`;
+                lucide.createIcons();
+            }
+        }
+
+        function resetOtpSteps() {
+            document.getElementById('otpStep1').classList.remove('hidden');
+            document.getElementById('otpStep2').classList.add('hidden');
+            document.getElementById('otpSendStatus').classList.add('hidden');
+            document.getElementById('otpVerifyStatus').classList.add('hidden');
+            document.getElementById('loginOtpCode').value = "";
+        }
+
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        // Initial Load & Polling every 5 seconds
+        fetchAccounts();
+        setInterval(fetchAccounts, 5000);
+    </script>
+</body>
+</html>
