@@ -76,12 +76,23 @@
             <div class="lg:col-span-2 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <div class="flex items-center gap-2">
+                        <div class="flex flex-wrap items-center gap-2">
                             <span id="autoStatusBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                                 <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
                                 AUTO KEEP-ALIVE: ACTIVE
                             </span>
-                            <span class="text-xs text-slate-400 font-mono">Loop: 3.5 Hours</span>
+                            <div class="flex items-center gap-1.5 bg-slate-950 border border-slate-700/80 rounded-lg px-2.5 py-1">
+                                <i data-lucide="timer" class="w-3.5 h-3.5 text-amber-400"></i>
+                                <span class="text-[11px] text-slate-400 font-medium">Loop:</span>
+                                <select id="intervalSelector" onchange="changeInterval(this.value)" class="bg-transparent text-xs text-amber-400 font-bold font-mono focus:outline-none cursor-pointer">
+                                    <option value="0.5" class="bg-slate-900 text-slate-200">30 Mins (High)</option>
+                                    <option value="1" class="bg-slate-900 text-slate-200">1.0 Hour (Safe)</option>
+                                    <option value="1.5" class="bg-slate-900 text-slate-200">1.5 Hours (Default)</option>
+                                    <option value="2" class="bg-slate-900 text-slate-200">2.0 Hours</option>
+                                    <option value="3" class="bg-slate-900 text-slate-200">3.0 Hours</option>
+                                    <option value="3.5" class="bg-slate-900 text-slate-200">3.5 Hours</option>
+                                </select>
+                            </div>
                         </div>
                         <h2 class="text-xl font-bold text-white mt-2">Continuous Session Refresher</h2>
                         <p class="text-sm text-slate-400 mt-1 max-w-xl">
@@ -332,6 +343,9 @@
 
             lastRun.innerText = auto.last_run;
             document.getElementById('totalAccountsCount').innerText = accounts.length;
+            if (auto.interval_hours && document.activeElement !== document.getElementById('intervalSelector')) {
+                document.getElementById('intervalSelector').value = auto.interval_hours;
+            }
 
             // Total plays calculation
             const totalPlays = accounts.reduce((sum, acc) => sum + (acc.plays_remaining || 0), 0);
@@ -450,6 +464,24 @@
             }
 
             lucide.createIcons();
+        }
+
+        async function changeInterval(val) {
+            const hours = parseFloat(val);
+            try {
+                const res = await fetch('/api/auto/interval', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ interval_hours: hours })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`Auto-Refresh loop set to ${hours} Hours! ⏱️`);
+                    fetchAccounts();
+                }
+            } catch (err) {
+                alert("Failed to update interval: " + err);
+            }
         }
 
         async function toggleAutoMode() {

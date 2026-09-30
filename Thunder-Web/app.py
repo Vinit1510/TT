@@ -57,7 +57,7 @@ def add_log(message: str, level: str = "info"):
 # Auto Keep-Alive Background Worker
 # ==============================================================================
 class AutoRefresherDaemon:
-    def __init__(self, interval_hours: float = 3.5):
+    def __init__(self, interval_hours: float = 1.5):
         self.interval_seconds = interval_hours * 3600
         self.is_running = True  # Default to ON
         self.thread: Optional[threading.Thread] = None
@@ -72,7 +72,7 @@ class AutoRefresherDaemon:
                 self.next_run_epoch = time.time() + self.interval_seconds
                 self.thread = threading.Thread(target=self._run_loop, daemon=True)
                 self.thread.start()
-                add_log("🟢 Auto Keep-Alive Mode STARTED (Refreshes every 3.5 hours)", "success")
+                add_log("🟢 Auto Keep-Alive Mode STARTED (Refreshes every 1.5 hours)", "success")
 
     def stop(self):
         with self.lock:
@@ -88,6 +88,12 @@ class AutoRefresherDaemon:
             if time.time() >= self.next_run_epoch:
                 self.execute_refresh_all()
                 self.next_run_epoch = time.time() + self.interval_seconds
+
+    def set_interval(self, interval_hours: float):
+        with self.lock:
+            self.interval_seconds = max(60, int(interval_hours * 3600))
+            self.next_run_epoch = time.time() + self.interval_seconds
+            add_log(f"⏱️ Auto-Refresh interval changed to {interval_hours} Hour(s)", "info")
 
     def execute_refresh_all(self):
         self.last_run = datetime.datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
@@ -105,7 +111,7 @@ class AutoRefresherDaemon:
         add_log(f"🎉 [AUTO-REFRESH] Cycle complete! {success_cnt}/{len(accounts)} accounts active.", "success")
 
 
-auto_daemon = AutoRefresherDaemon(interval_hours=3.5)
+auto_daemon = AutoRefresherDaemon(interval_hours=1.5)
 
 
 # ==============================================================================
@@ -307,7 +313,7 @@ def api_get_accounts():
         "accounts": accounts,
         "auto_mode": {
             "is_running": auto_daemon.is_running,
-            "interval_hours": 3.5,
+            "interval_hours": round(auto_daemon.interval_seconds / 3600.0, 2),
             "last_run": auto_daemon.last_run or "Pending First Cycle",
             "next_run_sec": next_sec,
             "next_run_str": f"{hrs:02d}:{mins:02d}:{secs:02d}" if auto_daemon.is_running else "Paused"
@@ -326,6 +332,19 @@ def api_auto_start():
 def api_auto_stop():
     auto_daemon.stop()
     return jsonify({"success": True, "is_running": False, "message": "Auto Keep-Alive Stopped!"})
+
+
+@app.route("/api/auto/interval", methods=["POST"])
+def api_set_interval():
+    data = request.get_json() or {}
+    try:
+        hours = float(data.get("interval_hours", 1.5))
+        if hours <= 0:
+            return jsonify({"success": False, "error": "Interval must be greater than 0"}), 400
+        auto_daemon.set_interval(hours)
+        return jsonify({"success": True, "interval_hours": hours, "message": f"Interval set to {hours} hours!"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
 
 
 @app.route("/api/refresh", methods=["POST"])
@@ -393,9 +412,9 @@ def api_verify_otp():
         # 2. Validate token
         r_val = sess.post(f"{BASE_URL}/api/auth/validate-token", json={"one_time_token": ott}, timeout=10)
         # 3. Token exchange
-        r_ex = sess.post(f"{BASE_URL}/api/auth/token-exchange", json={"one_time_token": ott}, timeout=10)
+        r_ex = sess.post(f"{BASE_URL}/api/auth/exchange-token", json={"one_time_token": ott}, timeout=10)
         if r_ex.status_code != 200:
-            return jsonify({"success": False, "error": f"Token exchange failed: {r_ex.text}"}), 400
+            return jsonify({"success": False, "error": f"Token exchange failed: {r_ex.status_code} {r_ex.text}"}), 400
 
         # Complete tutorials
         for p in ("/api/thunder-trail/tutorial-complete", "/api/thunder-trail/coach-mark-seen"):
